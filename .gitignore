@@ -1,0 +1,16 @@
+__pycache__/
+*.pyc
+*.pyo
+
+# Working directories (extracted game files, temp ISOs)
+out/
+unpacked/
+
+# Disc images
+*.iso
+*.rvz
+*.gcz
+*.gcm
+*.bin
+*.cue
+*.chd

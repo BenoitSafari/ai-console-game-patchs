@@ -1,0 +1,203 @@
+================================================================================
+ Spyro: A Hero's Tail - NTSC + French Patch - Feuille de route
+================================================================================
+Redige le 2026-03-19.  Contexte complet pour reprendre sans historique.
+
+OBJECTIF
+--------
+Creer une version hybride NTSC 60Hz avec audio et texte en francais.
+NTSC: G5SE7D (USA), PAL: G5SP7D (Europe, En/Fr/De/Es/It/Nl)
+Output: ngc/Spyro_A_Heros_Tail-(NTSC-U)(Hack)(Fr)(G5SE7D)[Rev0].rvz
+
+ETAT DES LIEUX
+--------------
+- DOL DIFFERENTS (4,492,256 B NTSC vs 4,494,912 B PAL, +2,656 B)
+  -> On ne peut PAS juste changer le country code comme Ultimate Spider-Man
+- Moteur : Eurocom, avec un systeme d'archive proprietaire :
+    Filelist.000  = archive unique contenant TOUS les fichiers du jeu
+                    NTSC = 634 MB (432 fichiers), PAL = 1.36 GB (643 fichiers)
+    Filelist.bin  = index binaire (31 KB NTSC / 49 KB PAL) - lu par le jeu
+    Filelist.txt  = manifest lisible humain (memes infos que .bin)
+    Filelist.cfi  = inconnu (52 KB, probablement config/checksums)
+- 211 fichiers PAL-only = fichiers audio par langue (fre_*, eng_*, ger_*...)
+- Autres fichiers hors archive :
+    opening.bnr   identique NTSC/PAL
+    Spyro.elf     = ELF du DOL (meme contenu, format different)
+    game.dmp      = config (legere diff NTSC/PAL)
+    lang/PAL      = PAL-only, ~2 MB binaire (polices/UI langues europeennes?)
+    lang/Memcard.tpl = NTSC-only
+    sierra.h4m    = PAL-only (video logo Sierra)
+
+STRUCTURE DU MANIFEST (Filelist.txt)
+-------------------------------------
+Format par ligne :
+  x:\spyro\binary\_bin_gc\<chemin>  : Len <taille> : Ver <version> : Hash <0xHHHHHHHH> : Ts <0xTTTTTTTT> :  Loc <offset_hex>:000
+
+Exemple concret :
+  x:\spyro\binary\_bin_gc\audio\fre_sb_generic.sfx  : Len 596160 : Ver 4 : Hash 0x2106e001 : Ts 0x08dc6ce4 :  Loc 2ba7d800:000
+
+- Loc = offset en hexadecimal dans Filelist.000 (le ":000" final est toujours 000)
+- Len = taille en bytes (decimal)
+- Hash = identifiant de ressource structure :
+    0x01XXXXXX = fichiers .edb (game data/levels)
+    0x21XXXXXX = fichiers .sfx (audio)
+    Le sous-champ semble encoder type + langue + ID
+- Alignement observe : les offsets sont multiples de 0x800 (2048 bytes)
+
+AUDIO : MAPPING NTSC -> PAL FR
+-------------------------------
+NTSC n'a PAS de prefixe de langue, PAL en a un par langue :
+
+  NTSC                          PAL FR
+  ----                          ------
+  audio\sb_generic.sfx       -> audio\fre_sb_generic.sfx
+  audio\sb_player_spyro.sfx  -> audio\fre_sb_player_spyro.sfx
+  audio\sb_player_ball.sfx   -> audio\fre_sb_player_ball.sfx
+  audio\sb_player_blink.sfx  -> audio\fre_sb_player_blink.sfx
+  audio\sb_player_hunter.sfx -> audio\fre_sb_player_hunter.sfx
+  audio\sb_realm1a.sfx       -> audio\fre_sb_realm1a.sfx
+  audio\sb_realm1b.sfx       -> audio\fre_sb_realm1b.sfx
+  audio\sb_realm1c.sfx       -> audio\fre_sb_realm1c.sfx
+  audio\sb_realm1z.sfx       -> audio\fre_sb_realm1z.sfx
+  (meme pattern pour realm2*, realm3*, realm4*, + mini_*, linkac)
+  audio\__sounddetails.sfx   -> audio\fre__sounddetails.sfx
+  audio\__streamdata.sfx     -> audio\fre__streamdata.sfx  (~91 MB)
+
+  NE PAS toucher : _mus_mfx_* (musique instrumentale, pas de voix)
+                   __projectdetails.sfx
+                   __musicdetails.sfx
+
+  Regle de mapping automatique :
+    Pour chaque entree NTSC "audio\sb_*" ou "audio\__sounddetails" ou "audio\__streamdata" :
+      -> chercher "audio\fre_" + meme suffixe dans le manifest PAL
+    Tout le reste : garder tel quel
+
+TEXTE
+-----
+- text.edb dans le PAL : 2,400 bytes seulement (probablement un index)
+- Le texte in-game est PROBABLEMENT dans le DOL ou dans les .edb de niveau
+- Les .edb de niveau communs font la MEME TAILLE entre NTSC et PAL
+  -> si le texte etait dedans, les tailles differeraient
+  -> donc le texte est probablement dans le DOL ou un autre mecanisme
+- A INVESTIGUER en etape 6 : chercher des chaines en/fr dans les DOL et .edb
+- OPTION DOL PAL : la diff de taille est minuscule (+2,656 B).
+  On pourrait tenter de prendre le DOL PAL + country code 'F' + tout le reste NTSC.
+  Le DOL PAL est probablement le meme code avec juste le support multilangue ajoute.
+  RISQUE : le DOL PAL pourrait initialiser le mode video PAL 50Hz.
+  MITIGATION : tester dans Dolphin, forcer 60Hz si necessaire.
+
+================================================================================
+ PLAN D'EXECUTION DETAILLE
+================================================================================
+
+ETAPE 1 : Parser Filelist.txt
+------------------------------
+Ecrire parse_spyro_filelist(path) -> list of dict :
+  {path, size, version, hash, timestamp, offset}
+
+Parsing : split sur " : ", extraire les champs.
+Attention : le chemin contient des "\" et des ":", donc splitter sur " : " (avec espaces).
+
+Valider : nombre d'entrees = 432 NTSC, 643 PAL.
+
+ETAPE 2 : Extracteur de fichiers depuis Filelist.000
+-----------------------------------------------------
+extract_from_archive(archive, offset, size) -> bytes
+  = open(archive), seek(offset), read(size)
+
+Valider : extraire albatros.edb (offset=0, size=52000), verifier la taille.
+
+ETAPE 3 : Reverse engineer Filelist.bin  *** ETAPE CLE ***
+-----------------------------------------------------------
+Approche methodique :
+
+a) Hex dump les 512 premiers bytes de Filelist.bin (NTSC et PAL)
+b) Chercher le magic number / header
+c) Chercher des valeurs connues :
+   - Hash 0x01000076 (albatros.edb, premier fichier)
+   - Offset 0x00000000 (premier fichier dans l'archive)
+   - Taille 52000 = 0x0000CB20
+d) Tester l'hypothese "header + table de records fixes" :
+   NTSC : (31584 - header_size) / 432 = taille_record ?
+   PAL  : (49600 - header_size) / 643 = taille_record ?
+   Si les deux donnent le meme resultat -> format confirme
+e) Tester l'hypothese "hash table / bucket table" :
+   Le jeu doit faire des lookups rapides par hash
+f) Comparer NTSC et PAL pour les entrees communes
+   -> les records pour les memes fichiers doivent avoir les memes champs
+   sauf offset (different car l'archive PAL a un layout different)
+
+SI le format est simple (table de records) :
+  -> Ecrire write_filelist_bin(entries) qui regenere le fichier
+SI le format est complexe (hash table, arbre, compression) :
+  -> Documenter et evaluer le temps supplementaire
+
+ETAPE 4 : Construire le mapping audio FR
+------------------------------------------
+Script automatique :
+  1. Parser les deux manifests
+  2. Pour chaque fichier audio NTSC (sb_*, __sounddetails, __streamdata)
+  3. Construire le nom PAL FR ("fre_" + nom)
+  4. Verifier que le fichier existe dans le manifest PAL
+  5. Stocker le mapping : {ntsc_entry -> pal_entry}
+
+ETAPE 5 : Repacker Filelist.000
+---------------------------------
+a) Lire le manifest NTSC comme base
+b) Pour chaque fichier, determiner la source :
+   - Si dans le mapping FR : lire depuis PAL Filelist.000
+   - Sinon : lire depuis NTSC Filelist.000
+c) Ecrire le nouveau Filelist.000 :
+   - Fichiers dans le MEME ORDRE que le manifest original
+   - Aligner chaque fichier a 0x800 (2048 bytes) - a confirmer
+   - Les tailles changent (FR != EN) donc tous les offsets apres le
+     premier remplacement seront differents -> recalculer tout
+d) Generer le nouveau Filelist.txt avec les offsets/tailles mis a jour
+e) Generer le nouveau Filelist.bin (depend de l'etape 3)
+
+ATTENTION : le Filelist.000 NTSC fait 634 MB, le FR stream audio fait ~91 MB.
+La taille finale sera similaire (les voix FR ~ meme taille que EN).
+
+ETAPE 6 : Investiguer le texte
+--------------------------------
+a) Hex dump de text.edb (2400 bytes) NTSC et PAL -> comparer
+b) Chercher des chaines lisibles (EN/FR) dans les deux versions
+c) Si text.edb est un container multilangue :
+   - Identifier la structure (header + offsets par langue?)
+   - Extraire la section FR
+   - L'injecter a la place de la section EN dans la version NTSC
+d) Si le texte est dans le DOL :
+   - Grep pour des chaines de jeu connues ("Press Start", menus...)
+   - Comparer les DOL pour trouver les blocs de texte
+e) Sinon : patch audio-only (fallback acceptable)
+
+ETAPE 7 : Assemblage final
+----------------------------
+Utiliser ngc_iso_toolbox.build_iso_from_vfs() :
+  sys_dir  = spyro_ntsc_extracted/sys/  (DOL NTSC = 60Hz)
+  vfs = {
+    "Filelist.000" : nouveau_archive_patche,
+    "Filelist.bin" : nouveau_index,
+    "Filelist.txt" : nouveau_manifest,
+    "Filelist.cfi" : NTSC original (a voir si besoin de maj),
+    "opening.bnr"  : NTSC original,
+    "Spyro.elf"    : NTSC original,
+    "game.dmp"     : NTSC original,
+    "lang/Memcard.tpl" : NTSC original,
+    # Optionnel : ajouter lang/PAL du PAL (polices accentuees)
+  }
+Puis DolphinTool convert -> RVZ
+
+FICHIERS DE TRAVAIL
+-------------------
+  C:\Users\BenoitSafari\Downloads\gc_work\spyro_ntsc_extracted\
+  C:\Users\BenoitSafari\Downloads\gc_work\spyro_pal_extracted\
+  C:\Users\BenoitSafari\Downloads\ngc_iso_toolbox\playbooks\spyro_aht_french.py
+
+RISQUES
+-------
+1. Filelist.bin complexe (hash table, checksums) -> +1-2h de reverse
+2. game.dmp ou Filelist.cfi contiennent des checksums -> crash au boot
+3. Texte introuvable ou format compile -> patch audio-only
+4. Alignement archive incorrect -> crash ou fichiers corrompus
+5. Le DOL NTSC s'attend a des tailles specifiques -> verifier game.dmp
