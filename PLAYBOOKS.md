@@ -36,14 +36,3 @@
 - **Raison du blocage** : Tout le jeu est dans un seul archive proprietaire (Filelist.000, moteur Eurocom). Les fichiers audio FR existent dans l'archive PAL (fre_sb_*.sfx) mais il faut reverse engineer Filelist.bin (index binaire) pour pouvoir repacker l'archive.
 - **Estimation** : ~1h30 de reverse engineering + dev
 
-### Spyro: Enter the Dragonfly (GameCube)
-- **Status** : Tente, patch construit mais non fonctionnel
-- **Methode tentee** : strings.txt <- StringsFR.txt + DFR*.ilg -> DUS*.ilg
-- **Raison de l'echec** : A investiguer (le jeu a des bugs notoires meme sans patch)
-
-### Crash Bandicoot: The Wrath of Cortex (GameCube)
-- **Status** : Non tente
-
-### Sonic Adventure 2 Battle / Sonic Adventure DX (GameCube)
-- **Status** : Non tente
-- **Notes** : Les versions NTSC-U incluent deja En,Ja,Fr,De,Es - potentiellement pas besoin de patch
