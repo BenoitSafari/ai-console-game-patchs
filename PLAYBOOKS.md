@@ -31,8 +31,9 @@
 - **Raison** : NTSC et PAL ont des architectures completement differentes. NTSC = fichiers .arc/.rel, PAL = TGC sub-discs par langue. DOLs incompatibles (918 KB vs 132 KB). Aucun fichier commun sauf opening.bnr.
 
 ### Spyro: A Hero's Tail (GameCube)
-- **Status** : Roadmap (faisable avec du reverse engineering)
+- **Status** : Partiellement reverse engineered, crash au boot
+- **Playbook** : `ngc.playbooks.spyro_aht_french`
 - **Roadmap** : `ngc/playbooks/spyro_aht_french_roadmap.txt`
-- **Raison du blocage** : Tout le jeu est dans un seul archive proprietaire (Filelist.000, moteur Eurocom). Les fichiers audio FR existent dans l'archive PAL (fre_sb_*.sfx) mais il faut reverse engineer Filelist.bin (index binaire) pour pouvoir repacker l'archive.
-- **Estimation** : ~1h30 de reverse engineering + dev
+- **Ce qui fonctionne** : Format Filelist.bin decode (header 16B + entries 28B chacune), archive repaquetee avec 42 fichiers audio FR (eng_* -> fre_*), Filelist.bin/txt regeneres
+- **Ce qui crashe** : "Invalid read from 0xdbd5feac" au boot. Cause probable : les 19,472 bytes de "tail data" dans Filelist.bin (apres les entries) contiennent probablement une hash table ou des offsets qui n'ont pas ete mis a jour. Le fichier Filelist.cfi (52 KB, role inconnu) pourrait aussi contenir des checksums invalides.
 
