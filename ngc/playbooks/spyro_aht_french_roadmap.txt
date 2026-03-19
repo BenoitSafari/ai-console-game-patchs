@@ -190,9 +190,9 @@ Puis DolphinTool convert -> RVZ
 
 FICHIERS DE TRAVAIL
 -------------------
-  C:\Users\BenoitSafari\Downloads\gc_work\spyro_ntsc_extracted\
-  C:\Users\BenoitSafari\Downloads\gc_work\spyro_pal_extracted\
-  C:\Users\BenoitSafari\Downloads\ngc_iso_toolbox\playbooks\spyro_aht_french.py
+  unpacked/spyro_ntsc/
+  unpacked/spyro_pal/
+  ngc/playbooks/spyro_aht_french.py
 
 RISQUES
 -------

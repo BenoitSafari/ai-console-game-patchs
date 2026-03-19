@@ -5,23 +5,9 @@ import shutil
 import subprocess
 from pathlib import Path
 
-# Fallback locations if DolphinTool is not on PATH
-_CANDIDATES = [
-    r"C:\Program Files (portable)\dolphin-dev\DolphinTool.exe",
-    r"C:\Program Files\Dolphin\DolphinTool.exe",
-    r"C:\Program Files (x86)\Dolphin\DolphinTool.exe",
-]
-
-
 def find_dolphin() -> str | None:
-    """Return the first DolphinTool found: PATH first, then known locations."""
-    found = shutil.which("DolphinTool") or shutil.which("DolphinTool.exe")
-    if found:
-        return found
-    for p in _CANDIDATES:
-        if os.path.isfile(p):
-            return p
-    return None
+    """Return DolphinTool if found on PATH, or *None*."""
+    return shutil.which("DolphinTool") or shutil.which("DolphinTool.exe")
 
 
 def dolphin_extract(dolphin: str, src: str, out_dir: str,

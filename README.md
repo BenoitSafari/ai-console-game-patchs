@@ -12,7 +12,7 @@ Module complet : parser/builder ISO GameCube en pur Python, extraction TGC, et p
 
 ```
 # Ajouter DolphinTool au PATH, par exemple :
-# Windows : ajouter "C:\Program Files (portable)\dolphin-dev" au PATH systeme
+# Windows : ajouter le dossier contenant DolphinTool.exe au PATH systeme
 # Le module cherche d'abord dans le PATH, puis dans les emplacements connus en fallback
 ```
 
