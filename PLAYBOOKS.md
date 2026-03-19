@@ -31,9 +31,9 @@
 - **Raison** : NTSC et PAL ont des architectures completement differentes. NTSC = fichiers .arc/.rel, PAL = TGC sub-discs par langue. DOLs incompatibles (918 KB vs 132 KB). Aucun fichier commun sauf opening.bnr.
 
 ### Spyro: A Hero's Tail (GameCube)
-- **Status** : Partiellement reverse engineered, crash au boot
+- **Status** : Working (audio FR uniquement — le jeu n'a pas de texte traduit)
 - **Playbook** : `ngc.playbooks.spyro_aht_french`
-- **Roadmap** : `ngc/playbooks/spyro_aht_french_roadmap.txt`
-- **Ce qui fonctionne** : Format Filelist.bin decode (header 16B + entries 28B chacune), archive repaquetee avec 42 fichiers audio FR (eng_* -> fre_*), Filelist.bin/txt regeneres
-- **Ce qui crashe** : "Invalid read from 0xdbd5feac" au boot. Cause probable : les 19,472 bytes de "tail data" dans Filelist.bin (apres les entries) contiennent probablement une hash table ou des offsets qui n'ont pas ete mis a jour. Le fichier Filelist.cfi (52 KB, role inconnu) pourrait aussi contenir des checksums invalides.
+- **Methode** : Patch in-place de Filelist.000 (archive Eurocom). Les 38 fichiers `eng_*.sfx` sont ecrases par les `fre_*.sfx` du PAL aux memes offsets. Filelist.bin/txt restent intacts.
+- **Resultat** : NTSC 60Hz + audio FR (voix, dialogues, cinematiques). 38/42 fichiers patches (4 `_mini_sgt` skipped: FR legerement plus gros que EN, pas de gap).
+- **Texte** : Investigation approfondie confirme que le jeu n'a AUCUNE traduction texte. Les menus (New Game, Options...) sont identiques EN dans toutes les regions. La localisation est 100% vocale.
 
