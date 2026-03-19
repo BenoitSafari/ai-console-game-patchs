@@ -161,6 +161,7 @@ def patch_archive_inplace(ntsc_manifest: list[dict], ntsc_archive: str,
 
     patched = 0
     skipped = 0
+    lang_patched = 0
 
     with open(out_archive, "r+b") as out, open(pal_archive, "rb") as pal_f:
         for i, fr_entry in pal_manifest_lookup.items():
@@ -188,8 +189,19 @@ def patch_archive_inplace(ntsc_manifest: list[dict], ntsc_archive: str,
 
             patched += 1
 
+        # Patch language selector byte in ALL eng_ .sfx sound banks
+        # Byte 6 of each MUSX file: 0x00=English -> 0x06=French
+        # This tells the engine to load *_FR audio AND French subtitles
+        for entry in ntsc_manifest:
+            short = entry["short"].lower()
+            if short.startswith("eng_") and short.endswith(".sfx"):
+                out.seek(entry["offset"] + 6)
+                out.write(b"\x06")
+                lang_patched += 1
+
     if verbose:
-        print(f"  Patched {patched} files in-place, skipped {skipped}")
+        print(f"  Patched {patched} audio files in-place, skipped {skipped}")
+        print(f"  Patched {lang_patched} .sfx language bytes (EN->FR)")
 
     return patched
 
@@ -282,10 +294,10 @@ def main():
         patched_archive, verbose=True,
     )
 
-    # [5/5] Build ISO (Filelist.bin and .txt stay UNCHANGED = all offsets preserved)
+    # [5/5] Build ISO (NTSC sys/ = 60Hz, patched archive = FR audio)
     print(f"\n[5/5] Building patched ISO ...")
     vfs = scan_files_dir(str(ntsc_files))
-    vfs["Filelist.000"] = patched_archive  # only the archive is different
+    vfs["Filelist.000"] = patched_archive
     print(f"  Total files in VFS: {len(vfs)}")
 
     iso_path = str(work / "SpyroAHT-NTSC-FR.iso")
@@ -300,7 +312,7 @@ def main():
 
     print(f"\nDone!  {output}")
     print(f"Patched {patched_count}/42 audio files in-place (4 _mini_sgt skipped: FR bigger than EN).")
-    print("Note: Text remains English (embedded in DOL/EDB).")
+    print("NTSC 60Hz + French voice audio. Text stays English (language selector hardcoded in DOL).")
 
 
 if __name__ == "__main__":

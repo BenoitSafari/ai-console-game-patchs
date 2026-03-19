@@ -5,6 +5,7 @@ __pycache__/
 # Working directories (extracted game files, temp ISOs)
 out/
 unpacked/
+src_files/
 
 # Disc images
 *.iso

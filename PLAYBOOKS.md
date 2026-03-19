@@ -31,9 +31,10 @@
 - **Raison** : NTSC et PAL ont des architectures completement differentes. NTSC = fichiers .arc/.rel, PAL = TGC sub-discs par langue. DOLs incompatibles (918 KB vs 132 KB). Aucun fichier commun sauf opening.bnr.
 
 ### Spyro: A Hero's Tail (GameCube)
-- **Status** : Working (audio FR uniquement — le jeu n'a pas de texte traduit)
+- **Status** : Working (audio FR only, texte FR non activable en NTSC 60Hz)
 - **Playbook** : `ngc.playbooks.spyro_aht_french`
-- **Methode** : Patch in-place de Filelist.000 (archive Eurocom). Les 38 fichiers `eng_*.sfx` sont ecrases par les `fre_*.sfx` du PAL aux memes offsets. Filelist.bin/txt restent intacts.
+- **Methode** : Patch in-place de Filelist.000 (archive Eurocom, format reverse engineered). Les 38 fichiers `eng_*.sfx` sont ecrases par les `fre_*.sfx` du PAL aux memes offsets + byte de langue 0x00->0x06 dans les sound banks.
 - **Resultat** : NTSC 60Hz + audio FR (voix, dialogues, cinematiques). 38/42 fichiers patches (4 `_mini_sgt` skipped: FR legerement plus gros que EN, pas de gap).
-- **Texte** : Investigation approfondie confirme que le jeu n'a AUCUNE traduction texte. Les menus (New Game, Options...) sont identiques EN dans toutes les regions. La localisation est 100% vocale.
+- **Texte FR** : Le texte francais EXISTE dans text.edb (UTF-16-LE, 1.5 MB reel vs 2.4 KB dans le manifest). Le NTSC contient deja toutes les langues. MAIS le selecteur de langue texte est controle par le DOL, et le DOL NTSC est hardcode sur English. Tente : swap .sfx lang byte, PAL game.dmp, PAL DOL, country code P, full PAL sys/ — aucun n'active le texte FR avec le Filelist NTSC.
+- **Conclusion** : Pour avoir texte FR, il faut utiliser le full PAL (sys/ + Filelist PAL) mais ca donne du 50Hz. Pas de solution propre NTSC 60Hz + texte FR sans reverse engineering du DOL PowerPC pour trouver et patcher le language index. Le patch audio-only reste le meilleur compromis.
 
