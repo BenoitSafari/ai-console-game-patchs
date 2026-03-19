@@ -146,52 +146,52 @@ def build_audio_mapping(ntsc_manifest: list[dict],
 # Archive rebuilder
 # ---------------------------------------------------------------------------
 
-def rebuild_archive(ntsc_manifest: list[dict], ntsc_archive: str,
-                    pal_manifest_lookup: dict[int, dict], pal_archive: str,
-                    out_archive: str, verbose: bool = True) -> list[dict]:
+def patch_archive_inplace(ntsc_manifest: list[dict], ntsc_archive: str,
+                          pal_manifest_lookup: dict[int, dict], pal_archive: str,
+                          out_archive: str, verbose: bool = True) -> int:
     """
-    Rebuild Filelist.000 with French audio from PAL replacing English from NTSC.
-    Returns updated manifest entries with new offsets/sizes.
+    Copy NTSC Filelist.000 and overwrite eng_ audio with fre_ audio IN-PLACE.
+    Only patches files where FR size <= EN size (preserves all offsets).
+    Returns count of patched files.
     """
-    new_manifest = []
-    current_offset = 0
+    import shutil
+    if verbose:
+        print(f"  Copying NTSC archive ({os.path.getsize(ntsc_archive):,} bytes)...")
+    shutil.copy2(ntsc_archive, out_archive)
 
-    with open(out_archive, "wb") as out:
-        with open(ntsc_archive, "rb") as ntsc_f, open(pal_archive, "rb") as pal_f:
-            for i, entry in enumerate(ntsc_manifest):
-                # Align
-                aligned = (current_offset + ARCHIVE_ALIGN - 1) & ~(ARCHIVE_ALIGN - 1)
-                if aligned > current_offset:
-                    out.write(b"\x00" * (aligned - current_offset))
-                    current_offset = aligned
+    patched = 0
+    skipped = 0
 
-                if i in pal_manifest_lookup:
-                    # Read French audio from PAL archive
-                    fr_entry = pal_manifest_lookup[i]
-                    pal_f.seek(fr_entry["offset"])
-                    data = pal_f.read(fr_entry["size"])
-                    new_entry = dict(entry)
-                    new_entry["size"] = fr_entry["size"]
-                    new_entry["offset"] = current_offset
-                else:
-                    # Read original from NTSC archive
-                    ntsc_f.seek(entry["offset"])
-                    data = ntsc_f.read(entry["size"])
-                    new_entry = dict(entry)
-                    new_entry["offset"] = current_offset
+    with open(out_archive, "r+b") as out, open(pal_archive, "rb") as pal_f:
+        for i, fr_entry in pal_manifest_lookup.items():
+            ntsc_entry = ntsc_manifest[i]
+            en_size = ntsc_entry["size"]
+            fr_size = fr_entry["size"]
 
-                out.write(data)
-                current_offset += len(data)
-                new_manifest.append(new_entry)
+            if fr_size > en_size:
+                if verbose:
+                    print(f"  SKIP {ntsc_entry['short']} (FR {fr_size:,} > EN {en_size:,})")
+                skipped += 1
+                continue
 
-                if verbose and (i + 1) % 50 == 0:
-                    print(f"\r  Packing {i+1}/{len(ntsc_manifest)} files...",
-                          end="", flush=True)
+            # Read French audio from PAL archive
+            pal_f.seek(fr_entry["offset"])
+            fr_data = pal_f.read(fr_size)
+
+            # Write at the SAME offset in the output archive
+            out.seek(ntsc_entry["offset"])
+            out.write(fr_data)
+
+            # Pad remaining bytes with zeros if FR is smaller
+            if fr_size < en_size:
+                out.write(b"\x00" * (en_size - fr_size))
+
+            patched += 1
 
     if verbose:
-        print(f"\r  Packed {len(ntsc_manifest)} files ({current_offset:,} bytes)")
+        print(f"  Patched {patched} files in-place, skipped {skipped}")
 
-    return new_manifest
+    return patched
 
 
 # ---------------------------------------------------------------------------
@@ -273,41 +273,19 @@ def main():
     for i, pal_e in list(mapping.items())[:5]:
         print(f"    {ntsc_manifest[i]['short']} -> {pal_e['short']}")
 
-    # [4/6] Rebuild archive
-    print(f"\n[4/6] Rebuilding Filelist.000 with French audio ...")
-    new_archive = str(work / "Filelist.000.patched")
-    new_manifest = rebuild_archive(
+    # [4/5] Patch archive in-place
+    print(f"\n[4/5] Patching Filelist.000 in-place (FR audio over EN) ...")
+    patched_archive = str(work / "Filelist.000.patched")
+    patched_count = patch_archive_inplace(
         ntsc_manifest, str(ntsc_files / "Filelist.000"),
         mapping, str(pal_files / "Filelist.000"),
-        new_archive, verbose=True,
+        patched_archive, verbose=True,
     )
 
-    # [5/6] Rebuild Filelist.bin and Filelist.txt
-    print("\n[5/6] Rebuilding Filelist.bin and Filelist.txt ...")
-    header, bin_entries, tail = parse_filelist_bin(str(ntsc_files / "Filelist.bin"))
-
-    # Update bin entries with new sizes and offsets
-    by_hash = {e["hash"]: e for e in new_manifest}
-    for be in bin_entries:
-        h = be[2]  # hash at index 2
-        if h in by_hash:
-            be[1] = by_hash[h]["size"]    # size at index 1
-            be[6] = by_hash[h]["offset"]  # offset at index 6
-
-    new_bin = str(work / "Filelist.bin.patched")
-    new_txt = str(work / "Filelist.txt.patched")
-    write_filelist_bin(header, bin_entries, tail, new_bin)
-    write_filelist_txt(new_manifest, new_txt)
-    print(f"  Filelist.bin: {os.path.getsize(new_bin):,} bytes")
-    print(f"  Filelist.txt: {os.path.getsize(new_txt):,} bytes")
-
-    # [6/6] Build ISO
-    print(f"\n[6/6] Building patched ISO ...")
+    # [5/5] Build ISO (Filelist.bin and .txt stay UNCHANGED = all offsets preserved)
+    print(f"\n[5/5] Building patched ISO ...")
     vfs = scan_files_dir(str(ntsc_files))
-    # Replace the 3 archive files with patched versions
-    vfs["Filelist.000"] = new_archive
-    vfs["Filelist.bin"] = new_bin
-    vfs["Filelist.txt"] = new_txt
+    vfs["Filelist.000"] = patched_archive  # only the archive is different
     print(f"  Total files in VFS: {len(vfs)}")
 
     iso_path = str(work / "SpyroAHT-NTSC-FR.iso")
@@ -317,15 +295,12 @@ def main():
     dolphin_convert(dolphin, iso_path, str(output), fmt="rvz")
     if os.path.exists(iso_path):
         os.remove(iso_path)
-
-    # Cleanup temp files
-    for tmp in [new_archive, new_bin, new_txt]:
-        if os.path.exists(tmp):
-            os.remove(tmp)
+    if os.path.exists(patched_archive):
+        os.remove(patched_archive)
 
     print(f"\nDone!  {output}")
-    print(f"Patched {len(mapping)} audio files (English -> French).")
-    print("Note: Text remains English (embedded in DOL/EDB, not patchable with simple swap).")
+    print(f"Patched {patched_count}/42 audio files in-place (4 _mini_sgt skipped: FR bigger than EN).")
+    print("Note: Text remains English (embedded in DOL/EDB).")
 
 
 if __name__ == "__main__":
